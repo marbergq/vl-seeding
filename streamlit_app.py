@@ -3,9 +3,60 @@ import streamlit as st
 def time_to_seconds(hours, minutes, seconds):
     return hours*3600 + minutes*60 + seconds
 
+def seconds_to_time(seconds):
+    hours = seconds // 3600
+    remaining = seconds % 3600
+    minutes = remaining // 60
+    seconds = remaining % 60
+    return f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
+
+def get_group_intervals(winner_seconds):
+    groups = [
+        ("Elit", 1.0),
+        ("1", 1.15),
+        ("2", 1.25),
+        ("3", 1.40),
+        ("4", 1.55),
+        ("5", 1.70),
+        ("6", 1.85),
+        ("7", 2.00),
+        ("8", 2.30),
+        ("9", float('inf'))
+    ]
+    
+    intervals = []
+    prev_max_time = 0
+    
+    for i, (name, max_ratio) in enumerate(groups):
+        if name == "Elit":
+            max_time = winner_seconds
+            interval_str = f"≤ {seconds_to_time(max_time)}"
+            ratio_str = "≤ 1.00x"
+        else:
+            min_time = prev_max_time + 1
+            if max_ratio == float('inf'):
+                interval_str = f"> {seconds_to_time(min_time - 1)}"
+                ratio_str = f"> {groups[i-1][1]:.2f}x"
+                max_time = None
+            else:
+                max_time = int(winner_seconds * max_ratio)
+                interval_str = f"{seconds_to_time(min_time)} – {seconds_to_time(max_time)}"
+                ratio_str = f"{groups[i-1][1]:.2f}x – {max_ratio:.2f}x"
+        
+        intervals.append({
+            "group": name,
+            "interval": interval_str,
+            "ratio": ratio_str
+        })
+        
+        if max_time is not None:
+            prev_max_time = max_time
+    
+    return intervals
+
 def calculate_seeding(winner_time, given_time):
     if winner_time <= 0:
-        return "Error: Vinnartiden kan inte vara noll"
+        return "Error", 0
     
     ratio = given_time / winner_time
     ratio = round(ratio, 2)
@@ -59,24 +110,22 @@ if st.button("Beräkna seedning"):
     else:
         seeding, ratio = calculate_seeding(winner_seconds, eval_seconds)
         st.success(f"**Seedningsgrupp**: {seeding}")
-        st.info(f"**Tidsratio**: {ratio}")
+        st.info(f"**Tidsratio**: {ratio:.2f}x")
+        
+        # Visa alla tidsintervall
+        st.markdown("### Tidsintervall för alla led")
+        intervals = get_group_intervals(winner_seconds)
+        
+        # Skapa en tabell
+        table = "| Led | Tidsintervall | Ratio |\n"
+        table += "|-----|---------------|-------|\n"
+        for interval in intervals:
+            table += f"| {interval['group']} | {interval['interval']} | {interval['ratio']} |\n"
+        st.markdown(table)
         
         # Förklaring
         st.markdown("### Förklaring")
-        st.write(f"Din tid är {ratio:.2f}x vinnarens tid på {distance} km.")
-        st.write("""
-        **Seedningsgränser**:
-        - Elit: ≤ 1.00x
-        - 1: 1.01-1.15x
-        - 2: 1.16-1.25x  
-        - 3: 1.26-1.40x
-        - 4: 1.41-1.55x
-        - 5: 1.56-1.70x
-        - 6: 1.71-1.85x
-        - 7: 1.86-2.00x
-        - 8: 2.01-2.30x
-        - 9: > 2.30x
-        """)
+        st.write(f"Din tid ({seconds_to_time(eval_seconds)}) är {ratio:.2f}x vinnarens tid ({seconds_to_time(winner_seconds)}) på {distance} km.")
 
 st.markdown("---")
 st.caption("Baserat på seedningsdata från Vasaloppet 2025. Gränser kan variera något mellan olika lopp.")
